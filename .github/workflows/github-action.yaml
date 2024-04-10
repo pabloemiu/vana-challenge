@@ -1,0 +1,48 @@
+name: Deploy to S3
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+env:
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@main
+
+      - name: Install AWS CLI
+        run: |
+          sudo apt-get install unzip
+            curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+            unzip awscliv2.zip
+
+      - name: Configure AWS credentials
+        run: |
+          echo $AWS_ACCESS_KEY_ID
+          mkdir -p ~/.aws
+          echo "[default]" >> ~/.aws/credentials
+          echo "aws_access_key_id = $AWS_ACCESS_KEY_ID " >> ~/.aws/credentials
+          echo "aws_secret_access_key = $AWS_SECRET_ACCESS_KEY " >> ~/.aws/credentials
+          echo "[default]" >> ~/.aws/config
+          echo "region = us-east-1" >> ~/.aws/config
+          cat ~/.aws/credentials
+          cat ~/.aws/config
+
+      - name: Zip files
+        run: zip -r index.zip index.py
+
+      - name: Upload to S3
+        run: |
+          aws s3 cp index.zip s3://vanachallenge/
+          LAMBDA_NAME=$(aws lambda list-functions --query 'Functions[].FunctionName' --output text)
+          echo $LAMBDA_NAME
+          aws lambda update-function-code --function-name $LAMBDA_NAME --s3-bucket vanachallenge --s3-key index.zip --region us-east-1
